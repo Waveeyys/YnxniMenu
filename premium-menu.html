@@ -369,7 +369,7 @@
                 </div>
                 <div class="toggle-container">
                     <span class="toggle-label">Enable No Clip</span>
-                    <div class="toggle active" data-target="noclip">
+                    <div class="toggle" data-target="noclip">
                         <div class="toggle-handle"></div>
                     </div>
                 </div>
@@ -511,9 +511,11 @@
             }
 
             sendToLua(type, data) {
+                // FiveM DUI message method
                 if (window.invokeNative) {
                     window.invokeNative('sendMessage', JSON.stringify({ type, data }));
                 }
+                // Fallback for testing
                 console.log('LiquidGlass → Lua:', type, data);
             }
 
@@ -526,7 +528,7 @@
                 }, 500);
             }
 
-            // Handle messages from Lua
+            // Handle messages from Lua (called via window event)
             handleMessage(data) {
                 console.log('Lua → LiquidGlass:', data);
                 
@@ -539,6 +541,12 @@
                         break;
                     case 'init':
                         console.log('Initialized with:', data.data);
+                        break;
+                    case 'showMenu':
+                        console.log('Menu show command received');
+                        break;
+                    case 'hideMenu':
+                        console.log('Menu hide command received');
                         break;
                 }
             }
@@ -563,15 +571,29 @@
         // Initialize menu
         const menu = new LiquidGlassMenu();
 
-        // Global access for Lua
+        // Global access for external calls
         window.LiquidGlassMenu = menu;
 
-        // Handle messages from Lua
+        // Listen for messages from FiveM (DUI callback)
         window.addEventListener('message', function(event) {
-            if (window.LiquidGlassMenu) {
-                window.LiquidGlassMenu.handleMessage(event.data);
+            try {
+                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                if (window.LiquidGlassMenu) {
+                    window.LiquidGlassMenu.handleMessage(data);
+                }
+            } catch (e) {
+                console.log('Error parsing message:', e);
             }
         });
+
+        // Alternative message listener for some FiveM versions
+        document.addEventListener('duiMessage', function(event) {
+            if (window.LiquidGlassMenu && event.detail) {
+                window.LiquidGlassMenu.handleMessage(event.detail);
+            }
+        });
+
+        console.log('LiquidGlass Menu Loaded Successfully!');
     </script>
 </body>
 </html>
