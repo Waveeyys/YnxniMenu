@@ -1,1 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ynxni Menu</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
 
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --darker: #020617;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --card-bg: rgba(15, 23, 42, 0.95);
+            --glass: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+            color: var(--light);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .menu-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><polygon fill="%231e293b" points="0,1000 1000,0 1000,1000"/></svg>') no-repeat center center;
+            background-size: cover;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--glass);
+            padding: 2rem 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--primary);
+        }
+
+        .logo h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }
+
+        .logo .version {
+            color: var(--gray);
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+
+        .main-tabs {
+            flex: 1;
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            margin: 0.5rem 0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: 500;
+        }
+
+        .tab:hover {
+            background: var(--glass);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .tab .icon {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .content-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .content-header h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(45deg, var(--light), var(--gray));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .status {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--glass);
+        }
+
+        .status.active {
+            background: var(--secondary);
+            color: var(--darker);
+        }
+
+        /* Menu Items Grid */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .menu-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--glass);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border-color: var(--primary);
+        }
+
+        .menu-card.selected {
+            border-color: var(--primary);
+            box-shadow: 0 5px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--light);
+        }
+
+        .card-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .badge-new {
+            background: var(--accent);
+            color: var(--darker);
+        }
+
+        .badge-pro {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .card-description {
+            color: var(--gray);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        /* Toggle Switch */
+        .toggle-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: var(--gray);
+            border-radius: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toggle.active {
+            background: var(--secondary);
+        }
+
+        .toggle-handle {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .toggle.active .toggle-handle {
+            left: 27px;
+        }
+
+        /* Slider */
+        .slider-container {
+            margin-top: 1rem;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            background: var(--glass);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(99, 102, 241, 0.5);
+        }
+
+        .slider-value {
+            text-align: right;
+            color: var(--primary);
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+
+        /* Keybind */
+        .keybind {
+            padding: 0.5rem 1rem;
+            background: var(--glass);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .keybind.binding {
+            border-color: var(--accent);
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--glass);
+            text-align: center;
+            color: var(--gray);
+            font-size: 0.8rem;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--darker);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-dark);
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">
+                <h1>QUANTUM</h1>
+                <div class="version">v2.0.1 PREMIUM</div>
+            </div>
+            
+            <div class="main-tabs">
+                <div class="tab active" data-tab="main">
+                    <span class="icon">⚡</span>
+                    <span>Main Features</span>
+                </div>
+                <div class="tab" data-tab="player">
+                    <span class="icon">👤</span>
+                    <span>Player</span>
+                </div>
+                <div class="tab" data-tab="vehicle">
+                    <span class="icon">🚗</span>
+                    <span>Vehicle</span>
+                </div>
+                <div class="tab" data-tab="weapon">
+                    <span class="icon">🔫</span>
+                    <span>Weapons</span>
+                </div>
+                <div class="tab" data-tab="visual">
+                    <span class="icon">👁️</span>
+                    <span>Visuals</span>
+                </div>
+                <div class="tab" data-tab="world">
+                    <span class="icon">🌎</span>
+                    <span>World</span>
+                </div>
+                <div class="tab" data-tab="settings">
+                    <span class="icon">⚙️</span>
+                    <span>Settings</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="content-header">
+                <h2>Main Features</h2>
+                <div class="status-indicators">
+                    <div class="status active">ONLINE</div>
+                    <div class="status">PREMIUM</div>
+                </div>
+            </div>
+
+            <div class="menu-grid">
+                <!-- God Mode Card -->
+                <div class="menu-card selected" data-action="godmode">
+                    <div class="card-header">
+                        <div class="card-title">God Mode</div>
+                        <div class="card-badge badge-pro">PRO</div>
+                    </div>
+                    <div class="card-description">
+                        Become invincible to all damage sources including players, NPCs, and environmental hazards.
+                    </div>
+                    <div class="toggle-container">
+                        <span>Enable God Mode</span>
+                        <div class="toggle" data-target="godmode">
+                            <div class="toggle-handle"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- No Clip Card -->
+                <div class="menu-card" data-action="noclip">
+                    <div class="card-header">
+                        <div class="card-title">No Clip</div>
+                        <div class="card-badge badge-new">NEW</div>
+                    </div>
+                    <div class="card-description">
+                        Fly through walls and objects with customizable movement speed and controls.
+                    </div>
+                    <div class="toggle-container">
+                        <span>Enable No Clip</span>
+                        <div class="toggle" data-target="noclip">
+                            <div class="toggle-handle"></div>
+                        </div>
+                    </div>
+                    <div class="slider-container">
+                        <input type="range" class="slider" min="1" max="20" value="5" data-target="noclip-speed">
+                        <div class="slider-value">Speed: 5.0</div>
+                    </div>
+                </div>
+
+                <!-- Invisibility Card -->
+                <div class="menu-card" data-action="invisible">
+                    <div class="card-header">
+                        <div class="card-title">Invisibility</div>
+                    </div>
+                    <div class="card-description">
+                        Become completely invisible to other players and NPCs while maintaining full functionality.
+                    </div>
+                    <div class="toggle-container">
+                        <span>Enable Invisibility</span>
+                        <div class="toggle" data-target="invisible">
+                            <div class="toggle-handle"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vehicle God Mode Card -->
+                <div class="menu-card" data-action="vehicle-godmode">
+                    <div class="card-header">
+                        <div class="card-title">Vehicle God Mode</div>
+                    </div>
+                    <div class="card-description">
+                        Make your current vehicle indestructible with collision and damage protection.
+                    </div>
+                    <div class="toggle-container">
+                        <span>Enable Vehicle God Mode</span>
+                        <div class="toggle" data-target="vehicle-godmode">
+                            <div class="toggle-handle"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Speed Boost Card -->
+                <div class="menu-card" data-action="speed-boost">
+                    <div class="card-header">
+                        <div class="card-title">Vehicle Speed Boost</div>
+                    </div>
+                    <div class="card-description">
+                        Instant acceleration and increased top speed for all vehicles with customizable power.
+                    </div>
+                    <div class="toggle-container">
+                        <span>Enable Speed Boost</span>
+                        <div class="toggle" data-target="speed-boost">
+                            <div class="toggle-handle"></div>
+                        </div>
+                    </div>
+                    <div class="slider-container">
+                        <input type="range" class="slider" min="50" max="200" value="100" data-target="boost-speed">
+                        <div class="slider-value">Power: 100%</div>
+                    </div>
+                </div>
+
+                <!-- Keybinds Card -->
+                <div class="menu-card" data-action="keybinds">
+                    <div class="card-header">
+                        <div class="card-title">Key Bindings</div>
+                    </div>
+                    <div class="card-description">
+                        Customize your control scheme for quick access to frequently used features.
+                    </div>
+                    <div class="toggle-container">
+                        <span>Menu Toggle Key</span>
+                        <div class="keybind" data-target="menu-key">F5</div>
+                    </div>
+                    <div class="toggle-container">
+                        <span>No Clip Toggle</span>
+                        <div class="keybind" data-target="noclip-key">N</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                Ynxni Menu v2.0.1 | Premium Edition | Made with ❤️
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class YnxniMenu {
+            constructor() {
+                this.currentTab = 'main';
+                this.selectedCard = null;
+                this.bindings = {};
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.loadSettings();
+            }
+
+            setupEventListeners() {
+                // Tab navigation
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        this.switchTab(e.currentTarget.dataset.tab);
+                    });
+                });
+
+                // Card selection
+                document.querySelectorAll('.menu-card').forEach(card => {
+                    card.addEventListener('click', (e) => {
+                        this.selectCard(e.currentTarget);
+                    });
+                });
+
+                // Toggle switches
+                document.querySelectorAll('.toggle').forEach(toggle => {
+                    toggle.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.toggleFeature(e.currentTarget.dataset.target);
+                    });
+                });
+
+                // Sliders
+                document.querySelectorAll('.slider').forEach(slider => {
+                    slider.addEventListener('input', (e) => {
+                        this.updateSlider(e.target);
+                    });
+                });
+
+                // Keybinds
+                document.querySelectorAll('.keybind').forEach(keybind => {
+                    keybind.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.startKeybinding(e.target);
+                    });
+                });
+            }
+
+            switchTab(tabName) {
+                document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+                document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+                
+                document.querySelector('.content-header h2').textContent = 
+                    tabName.charAt(0).toUpperCase() + tabName.slice(1) + ' Features';
+                
+                this.currentTab = tabName;
+            }
+
+            selectCard(card) {
+                document.querySelectorAll('.menu-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                this.selectedCard = card.dataset.action;
+            }
+
+            toggleFeature(feature) {
+                const toggle = document.querySelector(`[data-target="${feature}"]`);
+                toggle.classList.toggle('active');
+                
+                // Send message to Lua
+                this.sendToLua('toggleFeature', {
+                    feature: feature,
+                    state: toggle.classList.contains('active')
+                });
+            }
+
+            updateSlider(slider) {
+                const valueDisplay = slider.parentElement.querySelector('.slider-value');
+                const target = slider.dataset.target;
+                
+                valueDisplay.textContent = `${this.getSliderLabel(target)}: ${slider.value}${this.getSliderSuffix(target)}`;
+                
+                this.sendToLua('updateSlider', {
+                    target: target,
+                    value: parseFloat(slider.value)
+                });
+            }
+
+            getSliderLabel(target) {
+                const labels = {
+                    'noclip-speed': 'Speed',
+                    'boost-speed': 'Power'
+                };
+                return labels[target] || 'Value';
+            }
+
+            getSliderSuffix(target) {
+                const suffixes = {
+                    'noclip-speed': '.0',
+                    'boost-speed': '%'
+                };
+                return suffixes[target] || '';
+            }
+
+            startKeybinding(element) {
+                element.classList.add('binding');
+                element.textContent = 'Press any key...';
+                
+                const handler = (e) => {
+                    e.preventDefault();
+                    const key = this.getKeyName(e);
+                    element.textContent = key;
+                    element.classList.remove('binding');
+                    
+                    this.sendToLua('setKeybind', {
+                        target: element.dataset.target,
+                        key: key,
+                        keyCode: e.keyCode
+                    });
+                    
+                    document.removeEventListener('keydown', handler);
+                };
+                
+                document.addEventListener('keydown', handler);
+            }
+
+            getKeyName(event) {
+                if (event.key === ' ') return 'SPACE';
+                return event.key.toUpperCase();
+            }
+
+            sendToLua(type, data) {
+                if (window.invokeNative) {
+                    window.invokeNative('sendMessage', JSON.stringify({ type, data }));
+                }
+                console.log('Sending to Lua:', type, data);
+            }
+
+            loadSettings() {
+                // Load saved settings from localStorage or default values
+                const saved = localStorage.getItem('ynxni-settings');
+                if (saved) {
+                    const settings = JSON.parse(saved);
+                    this.applySettings(settings);
+                }
+            }
+
+            saveSettings() {
+                const settings = this.getCurrentSettings();
+                localStorage.setItem('ynxni-settings', JSON.stringify(settings));
+            }
+
+            getCurrentSettings() {
+                const settings = {};
+                // Collect all current settings
+                return settings;
+            }
+
+            applySettings(settings) {
+                // Apply loaded settings to UI
+            }
+
+            // Method to receive updates from Lua
+            updateFromLua(data) {
+                switch (data.type) {
+                    case 'featureUpdate':
+                        this.updateFeatureState(data.feature, data.state);
+                        break;
+                    case 'sliderUpdate':
+                        this.updateSliderValue(data.target, data.value);
+                        break;
+                    case 'keybindUpdate':
+                        this.updateKeybind(data.target, data.key);
+                        break;
+                }
+            }
+
+            updateFeatureState(feature, state) {
+                const toggle = document.querySelector(`[data-target="${feature}"]`);
+                if (toggle) {
+                    toggle.classList.toggle('active', state);
+                }
+            }
+
+            updateSliderValue(target, value) {
+                const slider = document.querySelector(`[data-target="${target}"]`);
+                if (slider) {
+                    slider.value = value;
+                    this.updateSlider(slider);
+                }
+            }
+
+            updateKeybind(target, key) {
+                const keybind = document.querySelector(`[data-target="${target}"]`);
+                if (keybind) {
+                    keybind.textContent = key;
+                }
+            }
+        }
+
+        // Initialize the menu
+        const menu = new YnxniMenu();
+
+        // Expose to global scope for Lua communication
+        window.YnxniMenu = menu;
+    </script>
+</body>
+</html>
