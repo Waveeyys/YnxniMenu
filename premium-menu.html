@@ -1,599 +1,364 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiquidGlass Menu</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-        }
+import React, { useState, useEffect, useRef } from 'react';
 
-        :root {
-            --primary: #00d4ff;
-            --primary-glow: #00ff88;
-            --secondary: #ff0080;
-            --glass: rgba(255, 255, 255, 0.1);
-            --glass-dark: rgba(0, 0, 0, 0.2);
-            --background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-            --text: #ffffff;
-            --text-secondary: #b0b0b0;
-        }
+// --- Configuration ---
+const HEADER_BANNER = "https://i.ibb.co/6JphhX1G/Menu-Banner3.png";
 
-        body {
-            background: var(--background);
-            color: var(--text);
-            min-height: 100vh;
-            overflow: hidden;
-            position: relative;
-        }
+// --- Menu Data Definitions ---
 
-        /* Liquid Glass Background Effects */
-        .liquid-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            z-index: -1;
-        }
+// Helper to create simple items
+const item = (label, props = {}) => ({ label, type: 'action', ...props });
+const submenu = (label, items, props = {}) => ({ label, type: 'submenu', items, ...props });
+const toggle = (label, props = {}) => ({ label, type: 'toggle', value: false, ...props });
+const slider = (label, min, max, initial, props = {}) => ({ label, type: 'slider', min, max, value: initial, ...props });
 
-        .liquid-bubble {
-            position: absolute;
-            border-radius: 50%;
-            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
-            opacity: 0.1;
-            animation: float 6s ease-in-out infinite;
-        }
+// The Player Options Submenu Content
+const playerOptionsItems = [
+  toggle('Godmode'),
+  slider('Quick Regen', 1, 2, 1),
+  item('Heal'),
+  item('Armour'),
+  item('Clean'),
+  toggle('Auto Clean'),
+  toggle('No Clip', { description: 'Fly through objects, without T Posing, your player is still running.' }),
+  toggle('No Collisions', { description: 'Phase through any native object.' }),
+  toggle('Invisibility'),
+  toggle('Player Visible Locally', { description: 'You are invisible to other players.' }),
+  toggle('Super Run'),
+  slider('Swim Speed', 1, 20, 10), // Assuming reasonable max for swim speed
+  toggle('Super Jump'),
+  toggle('Super Flight'),
+  toggle('Explosive Melee'),
+  toggle('Seatbelt', { description: 'For vehicles.' }),
+  toggle('No Ragdoll'),
+  toggle('Infinite Stamina'),
+  item('Clone Bodyguard', { description: 'Clones a bodyguard of you.' }),
+  slider('Damage Mod', 1, 5, 1),
+  slider('Melee Damage Mod', 1, 5, 1),
+  item('Suicide', { description: 'Kills your player.' }),
+];
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) scale(1); }
-            50% { transform: translateY(-20px) scale(1.1); }
-        }
+// Main Menu Structure
+const MENU_DATA = {
+  Local: [
+    submenu('Player Options', playerOptionsItems, { 
+      description: 'Submenu containing features directly related to your player ped.' 
+    }),
+    submenu('Vehicle Options', [item('Repair'), item('Upgrade'), toggle('Godmode')]),
+    submenu('Model Changer', [item('Reset'), item('Input Custom')]),
+    submenu('Outfitter', [item('Wardrobe')]),
+    submenu('Animations', [item('Stop Animation')]),
+    submenu('PTFX', [item('Stop PTFX')]),
+    submenu('Teleport', [item('Waypoint'), item('Objective')]),
+    submenu('Aim Assist', [toggle('Silent Aim')]),
+    submenu('Weapons', [item('Give All')]),
+    submenu('Weather and Time', [item('Freeze')]),
+    submenu('Scripts', []),
+    submenu('Script Features', []),
+    submenu('ASI Plugins', [], {
+      description: 'Submenu containing options related to loading and unloading .asi scripts.',
+      warning: 'Must have the separate MDSOAB .asi loader installed. https://gta.2take1.menu/dev/mdsoab/'
+    }),
+    submenu('DLCs', []),
+    submenu('Misc', []),
+    submenu('Settings', []),
+  ],
+  Online: [
+    submenu('Online Players', []),
+    submenu('All Players', []),
+    submenu('Lobby', []),
+    submenu('Visuals', []),
+    submenu('Modder Detection', []),
+  ],
+  Spawn: [
+    submenu('Vehicles', []),
+    submenu('Objects', []),
+    submenu('Peds', []),
+    submenu('Editor', []),
+  ]
+};
 
-        /* Main Container */
-        .menu-container {
-            width: 100%;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding: 1.5rem;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass);
-            border-radius: 20px 0 0 20px;
-            box-shadow: 
-                -20px 0 40px rgba(0, 212, 255, 0.1),
-                inset 1px 0 0 rgba(255, 255, 255, 0.1);
-            position: relative;
-            overflow: hidden;
-        }
+const TABS = Object.keys(MENU_DATA);
 
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--glass);
-            position: relative;
-        }
+const App = () => {
+  // --- State ---
+  const [activeTab, setActiveTab] = useState(0);
+  const [menuVisible, setMenuVisible] = useState(true);
+  
+  // Navigation Stack: Keeps track of where we are.
+  // Each item in stack: { title: string, items: array, selectedIndex: number }
+  const [navStack, setNavStack] = useState([]);
+  
+  // Current Selection (for the current active view)
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-        .header::after {
-            content: '';
-            position: absolute;
-            bottom: -1px;
-            left: 25%;
-            width: 50%;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--primary), transparent);
-        }
+  // Dynamic Item State (Mutable copy for toggles/sliders in this session)
+  // In a real app, this might sync with Lua.
+  const [localData, setLocalData] = useState(MENU_DATA);
 
-        .logo {
-            font-size: 1.8rem;
-            font-weight: 800;
-            background: linear-gradient(45deg, var(--primary), var(--primary-glow));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
-        }
+  // Refs
+  const listRef = useRef(null);
+  const itemRefs = useRef([]);
 
-        .subtitle {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            font-weight: 300;
-        }
+  // --- Derived State ---
+  const isRoot = navStack.length === 0;
+  
+  // Get the list of items we should currently display
+  const currentViewItems = isRoot 
+    ? localData[TABS[activeTab]] 
+    : navStack[navStack.length - 1].items;
 
-        /* Content Area */
-        .content {
-            flex: 1;
-            overflow-y: auto;
-            padding-right: 0.5rem;
-        }
+  const currentHeader = isRoot ? TABS[activeTab] : navStack[navStack.length - 1].title;
+  const selectedItem = currentViewItems[selectedIndex];
 
-        /* Scrollbar Styling */
-        .content::-webkit-scrollbar {
-            width: 4px;
-        }
+  // --- Helpers ---
+  
+  // Modify an item in the current view (e.g. toggle boolean or change slider value)
+  const updateItemState = (index, updates) => {
+    if (isRoot) {
+      // Logic to update root items would go here (complex due to structure)
+      // For this demo, we mostly update inside submenus
+    } else {
+      const newStack = [...navStack];
+      const activeLayer = newStack[newStack.length - 1];
+      const newItems = [...activeLayer.items];
+      newItems[index] = { ...newItems[index], ...updates };
+      activeLayer.items = newItems;
+      setNavStack(newStack);
+    }
+  };
 
-        .content::-webkit-scrollbar-track {
-            background: transparent;
-        }
+  // --- Interaction Logic ---
 
-        .content::-webkit-scrollbar-thumb {
-            background: var(--primary);
-            border-radius: 2px;
-        }
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!menuVisible) return;
 
-        /* Feature Cards */
-        .feature-card {
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 1.2rem;
-            margin-bottom: 1rem;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
+      const currentItem = currentViewItems[selectedIndex];
 
-        .feature-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-            transition: left 0.5s ease;
-        }
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex(prev => prev > 0 ? prev - 1 : currentViewItems.length - 1);
+          break;
+          
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex(prev => prev < currentViewItems.length - 1 ? prev + 1 : 0);
+          break;
 
-        .feature-card:hover::before {
-            left: 100%;
-        }
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (currentItem?.type === 'slider') {
+             // Decrease Slider
+             const newVal = Math.max(currentItem.min, currentItem.value - 1);
+             updateItemState(selectedIndex, { value: newVal });
+          } else if (!isRoot) {
+            // Go Back
+            const prevStack = navStack[navStack.length - 1];
+            setNavStack(prev => prev.slice(0, -1));
+            setSelectedIndex(prevStack.previousIndex || 0);
+          } else {
+            // Change Tab
+            setActiveTab(prev => prev > 0 ? prev - 1 : TABS.length - 1);
+            setSelectedIndex(0);
+          }
+          break;
 
-        .feature-card:hover {
-            transform: translateX(-5px);
-            border-color: var(--primary);
-            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.2);
-        }
+        case 'Backspace':
+          e.preventDefault();
+          if (!isRoot) {
+            const prevStack = navStack[navStack.length - 1];
+            setNavStack(prev => prev.slice(0, -1));
+            setSelectedIndex(prevStack.previousIndex || 0);
+          }
+          break;
 
-        .feature-card.active {
-            border-color: var(--primary);
-            background: rgba(0, 212, 255, 0.1);
-        }
+        case 'ArrowRight':
+          e.preventDefault();
+          if (currentItem?.type === 'slider') {
+            // Increase Slider
+            const newVal = Math.min(currentItem.max, currentItem.value + 1);
+            updateItemState(selectedIndex, { value: newVal });
+          } else if (currentItem?.type === 'submenu') {
+            // Enter Submenu
+            setNavStack(prev => [
+              ...prev, 
+              { 
+                title: currentItem.label, 
+                items: currentItem.items, 
+                previousIndex: selectedIndex 
+              }
+            ]);
+            setSelectedIndex(0);
+          } else {
+             // Root Tab Change
+             if(isRoot) {
+                setActiveTab(prev => prev < TABS.length - 1 ? prev + 1 : 0);
+                setSelectedIndex(0);
+             }
+          }
+          break;
 
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.8rem;
-        }
+        case 'Enter':
+          e.preventDefault();
+          if (currentItem?.type === 'submenu') {
+            setNavStack(prev => [
+              ...prev, 
+              { 
+                title: currentItem.label, 
+                items: currentItem.items, 
+                previousIndex: selectedIndex 
+              }
+            ]);
+            setSelectedIndex(0);
+          } else if (currentItem?.type === 'toggle') {
+            updateItemState(selectedIndex, { value: !currentItem.value });
+          } else if (currentItem?.type === 'action') {
+            // Flash effect or console log
+            console.log("Triggered:", currentItem.label);
+          }
+          break;
 
-        .feature-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--text);
-        }
+        default:
+          break;
+      }
+    };
 
-        .feature-badge {
-            background: var(--primary);
-            color: black;
-            padding: 0.2rem 0.6rem;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 700;
-        }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [menuVisible, selectedIndex, navStack, activeTab, currentViewItems, isRoot]);
 
-        .feature-description {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            line-height: 1.4;
-            margin-bottom: 1rem;
-        }
+  // Auto-scroll effect
+  useEffect(() => {
+    if (itemRefs.current[selectedIndex] && listRef.current) {
+      const el = itemRefs.current[selectedIndex];
+      const container = listRef.current;
+      const elTop = el.offsetTop;
+      const elBottom = elTop + el.clientHeight;
+      const containerTop = container.scrollTop;
+      const containerBottom = containerTop + container.clientHeight;
+      if (elTop < containerTop) container.scrollTop = elTop;
+      else if (elBottom > containerBottom) container.scrollTop = elBottom - container.clientHeight;
+    }
+  }, [selectedIndex]);
 
-        /* Toggle Switch */
-        .toggle-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+  // --- Rendering Helpers ---
 
-        .toggle-label {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
+  const renderValue = (item) => {
+    if (item.type === 'toggle') {
+      return item.value ? <span className="text-green-400 font-bold">[ON]</span> : <span className="text-red-400 font-bold">[OFF]</span>;
+    }
+    if (item.type === 'slider') {
+      return <span className="font-mono text-xs">{`< ${item.value} >`}</span>;
+    }
+    if (item.type === 'submenu') {
+      return <span className="font-bold text-[10px] tracking-tighter">{">>"}</span>;
+    }
+    return null;
+  };
 
-        .toggle {
-            position: relative;
-            width: 50px;
-            height: 26px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 13px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
+  return (
+    <div className="min-h-screen w-full flex items-center justify-start pl-20 bg-transparent text-sm font-sans select-none overflow-hidden relative">
+      
+      {/* Background (Hidden in production/transparent) */}
+      <div className="absolute inset-0 z-[-1] opacity-0"></div>
 
-        .toggle.active {
-            background: var(--primary);
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-        }
+      {menuVisible && (
+        <div className="relative flex items-start gap-4">
+          
+          {/* --- MAIN MENU CONTAINER --- */}
+          <div className="w-[320px] flex flex-col shadow-2xl animate-in fade-in slide-in-from-left-4 duration-300">
+            
+            {/* Header */}
+            <div className="h-24 relative bg-black border-b border-white/10 shrink-0">
+              <img src={HEADER_BANNER} alt="Banner" className="w-full h-full object-cover opacity-90" />
+              
+              {/* Tabs (Only visible at Root) */}
+              {isRoot ? (
+                <div className="absolute bottom-0 left-0 w-full flex px-2 gap-1 bg-gradient-to-t from-black/80 to-transparent pt-4">
+                  {TABS.map((tab, index) => (
+                    <div
+                      key={tab}
+                      className={`
+                        flex-1 text-center py-1 cursor-pointer transition-colors duration-150 uppercase tracking-wide text-xs font-semibold z-10
+                        ${activeTab === index 
+                          ? 'bg-gradient-to-b from-gray-200 to-gray-400 text-black shadow-lg' 
+                          : 'text-gray-300 hover:text-white bg-black/40'}
+                      `}
+                      onClick={() => { setActiveTab(index); setSelectedIndex(0); }}
+                    >
+                      {tab}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Breadcrumb / Submenu Title when deep in menu */
+                <div className="absolute bottom-0 left-0 w-full bg-black/80 text-white px-3 py-1 text-xs font-bold border-t border-white/20">
+                   {currentHeader}
+                </div>
+              )}
+            </div>
 
-        .toggle-handle {
-            position: absolute;
-            top: 3px;
-            left: 3px;
-            width: 20px;
-            height: 20px;
-            background: white;
-            border-radius: 50%;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-        }
+            {/* List */}
+            <div 
+              ref={listRef}
+              className="bg-black/95 h-[400px] overflow-y-auto flex flex-col py-2 scrollbar-thin pr-1"
+            >
+              <style>{`
+                ::-webkit-scrollbar { width: 6px; }
+                ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+                ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+              `}</style>
 
-        .toggle.active .toggle-handle {
-            left: 27px;
-        }
+              {currentViewItems.map((item, index) => (
+                <div
+                  key={index}
+                  ref={el => itemRefs.current[index] = el}
+                  className={`
+                    px-3 py-1 flex items-center justify-between cursor-pointer transition-all duration-75 shrink-0
+                    ${selectedIndex === index 
+                      ? 'bg-white text-black font-semibold' 
+                      : 'text-gray-200 hover:bg-white/10'}
+                  `}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                >
+                  <span className="truncate pr-2">{item.label}</span>
+                  <div className="flex items-center gap-2">
+                     {renderValue(item)}
+                  </div>
+                </div>
+              ))}
+              
+              {currentViewItems.length === 0 && (
+                 <div className="text-gray-500 text-xs text-center py-4 italic">No Options</div>
+              )}
+            </div>
 
-        /* Sliders */
-        .slider-container {
-            margin-top: 1rem;
-            display: none;
-        }
+            {/* Footer */}
+            <div className="bg-black text-gray-400 text-[10px] px-2 py-1 flex justify-between items-center border-t border-white/20 shrink-0">
+              <span>GIA Premium</span>
+              <span>v3.0.1</span>
+            </div>
+          </div>
 
-        .feature-card.active .slider-container {
-            display: block;
-            animation: slideDown 0.3s ease;
-        }
+          {/* --- INFO BOX --- */}
+          {selectedItem?.description && (
+            <div className="w-[280px] bg-black/90 p-4 border-l-4 border-white/20 text-white shadow-xl animate-in fade-in slide-in-from-left-2 duration-300 mt-24">
+              <div className="text-xs leading-relaxed text-gray-300">
+                {selectedItem.description}
+              </div>
+              {selectedItem.warning && (
+                <div className="mt-3 text-xs text-yellow-500 font-medium leading-relaxed">
+                  {selectedItem.warning}
+                </div>
+              )}
+            </div>
+          )}
 
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .slider {
-            width: 100%;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
-            outline: none;
-            -webkit-appearance: none;
-        }
-
-        .slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
-            background: var(--primary);
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
-        }
-
-        .slider-value {
-            text-align: center;
-            color: var(--primary);
-            font-weight: 600;
-            margin-top: 0.5rem;
-            font-size: 0.9rem;
-        }
-
-        /* Footer */
-        .footer {
-            margin-top: 2rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--glass);
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-        }
-
-        /* Status Indicator */
-        .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.3rem 0.8rem;
-            background: rgba(0, 255, 136, 0.1);
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            border-radius: 10px;
-            font-size: 0.8rem;
-        }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            background: #00ff88;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-    </style>
-</head>
-<body>
-    <!-- Liquid Background -->
-    <div class="liquid-bg">
-        <div class="liquid-bubble" style="width: 200px; height: 200px; top: 10%; left: 10%; animation-delay: 0s;"></div>
-        <div class="liquid-bubble" style="width: 150px; height: 150px; top: 60%; left: 80%; animation-delay: 2s;"></div>
-        <div class="liquid-bubble" style="width: 100px; height: 100px; top: 30%; left: 60%; animation-delay: 4s;"></div>
+        </div>
+      )}
     </div>
+  );
+};
 
-    <!-- Menu Container -->
-    <div class="menu-container">
-        <!-- Header -->
-        <div class="header">
-            <div class="logo">LIQUIDGLASS</div>
-            <div class="subtitle">Premium Menu System</div>
-            <div class="status" style="margin-top: 0.5rem;">
-                <div class="status-dot"></div>
-                <span>READY</span>
-            </div>
-        </div>
-
-        <!-- Content -->
-        <div class="content">
-            <!-- God Mode Card -->
-            <div class="feature-card" data-feature="godmode">
-                <div class="card-header">
-                    <div class="feature-title">God Mode</div>
-                    <div class="feature-badge">PRO</div>
-                </div>
-                <div class="feature-description">
-                    Become completely invincible to all damage sources.
-                </div>
-                <div class="toggle-container">
-                    <span class="toggle-label">Enable God Mode</span>
-                    <div class="toggle" data-target="godmode">
-                        <div class="toggle-handle"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- No Clip Card -->
-            <div class="feature-card active" data-feature="noclip">
-                <div class="card-header">
-                    <div class="feature-title">No Clip</div>
-                    <div class="feature-badge">NEW</div>
-                </div>
-                <div class="feature-description">
-                    Fly through walls and objects with free movement.
-                </div>
-                <div class="toggle-container">
-                    <span class="toggle-label">Enable No Clip</span>
-                    <div class="toggle" data-target="noclip">
-                        <div class="toggle-handle"></div>
-                    </div>
-                </div>
-                <div class="slider-container">
-                    <input type="range" class="slider" min="1" max="10" value="3" step="0.5" data-target="noclip-speed">
-                    <div class="slider-value">Speed: 3.0</div>
-                </div>
-            </div>
-
-            <!-- Invisibility Card -->
-            <div class="feature-card" data-feature="invisible">
-                <div class="card-header">
-                    <div class="feature-title">Invisibility</div>
-                </div>
-                <div class="feature-description">
-                    Become invisible to other players and NPCs.
-                </div>
-                <div class="toggle-container">
-                    <span class="toggle-label">Enable Invisibility</span>
-                    <div class="toggle" data-target="invisible">
-                        <div class="toggle-handle"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Vehicle God Mode Card -->
-            <div class="feature-card" data-feature="vehicleGodmode">
-                <div class="card-header">
-                    <div class="feature-title">Vehicle God Mode</div>
-                </div>
-                <div class="feature-description">
-                    Make your vehicle indestructible and immune to damage.
-                </div>
-                <div class="toggle-container">
-                    <span class="toggle-label">Enable Vehicle God Mode</span>
-                    <div class="toggle" data-target="vehicleGodmode">
-                        <div class="toggle-handle"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            LiquidGlass v1.0 | Right Side Menu
-        </div>
-    </div>
-
-    <script>
-        class LiquidGlassMenu {
-            constructor() {
-                this.currentFeature = 'noclip';
-                this.init();
-            }
-
-            init() {
-                this.createLiquidBackground();
-                this.setupEventListeners();
-                this.notifyReady();
-            }
-
-            createLiquidBackground() {
-                const bg = document.querySelector('.liquid-bg');
-                for (let i = 0; i < 8; i++) {
-                    const bubble = document.createElement('div');
-                    bubble.className = 'liquid-bubble';
-                    const size = Math.random() * 100 + 50;
-                    const left = Math.random() * 100;
-                    const top = Math.random() * 100;
-                    const delay = Math.random() * 6;
-                    
-                    bubble.style.cssText = `
-                        width: ${size}px;
-                        height: ${size}px;
-                        top: ${top}%;
-                        left: ${left}%;
-                        animation-delay: ${delay}s;
-                        opacity: ${Math.random() * 0.1 + 0.05};
-                    `;
-                    
-                    bg.appendChild(bubble);
-                }
-            }
-
-            setupEventListeners() {
-                // Feature card selection
-                document.querySelectorAll('.feature-card').forEach(card => {
-                    card.addEventListener('click', (e) => {
-                        if (!e.target.closest('.toggle')) {
-                            this.selectFeature(card);
-                        }
-                    });
-                });
-
-                // Toggle switches
-                document.querySelectorAll('.toggle').forEach(toggle => {
-                    toggle.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.toggleFeature(toggle.dataset.target);
-                    });
-                });
-
-                // Sliders
-                document.querySelectorAll('.slider').forEach(slider => {
-                    slider.addEventListener('input', (e) => {
-                        this.updateSlider(e.target);
-                    });
-                });
-            }
-
-            selectFeature(card) {
-                document.querySelectorAll('.feature-card').forEach(c => {
-                    c.classList.remove('active');
-                });
-                card.classList.add('active');
-                this.currentFeature = card.dataset.feature;
-            }
-
-            toggleFeature(feature) {
-                const toggle = document.querySelector(`[data-target="${feature}"]`);
-                const isActive = toggle.classList.contains('active');
-                
-                toggle.classList.toggle('active');
-                
-                this.sendToLua('toggleFeature', {
-                    feature: feature,
-                    state: !isActive
-                });
-            }
-
-            updateSlider(slider) {
-                const valueDisplay = slider.parentElement.querySelector('.slider-value');
-                valueDisplay.textContent = `Speed: ${slider.value}`;
-                
-                this.sendToLua('updateSlider', {
-                    target: slider.dataset.target,
-                    value: parseFloat(slider.value)
-                });
-            }
-
-            sendToLua(type, data) {
-                // FiveM DUI message method
-                if (window.invokeNative) {
-                    window.invokeNative('sendMessage', JSON.stringify({ type, data }));
-                }
-                // Fallback for testing
-                console.log('LiquidGlass → Lua:', type, data);
-            }
-
-            notifyReady() {
-                setTimeout(() => {
-                    this.sendToLua('ready', { 
-                        message: 'LiquidGlass Menu Ready',
-                        version: '1.0'
-                    });
-                }, 500);
-            }
-
-            // Handle messages from Lua (called via window event)
-            handleMessage(data) {
-                console.log('Lua → LiquidGlass:', data);
-                
-                switch (data.type) {
-                    case 'featureUpdate':
-                        this.updateFeatureUI(data.data.feature, data.data.state);
-                        break;
-                    case 'sliderUpdate':
-                        this.updateSliderUI(data.data.target, data.data.value);
-                        break;
-                    case 'init':
-                        console.log('Initialized with:', data.data);
-                        break;
-                    case 'showMenu':
-                        console.log('Menu show command received');
-                        break;
-                    case 'hideMenu':
-                        console.log('Menu hide command received');
-                        break;
-                }
-            }
-
-            updateFeatureUI(feature, state) {
-                const toggle = document.querySelector(`[data-target="${feature}"]`);
-                if (toggle) {
-                    toggle.classList.toggle('active', state);
-                }
-            }
-
-            updateSliderUI(target, value) {
-                const slider = document.querySelector(`[data-target="${target}"]`);
-                if (slider) {
-                    slider.value = value;
-                    const valueDisplay = slider.parentElement.querySelector('.slider-value');
-                    valueDisplay.textContent = `Speed: ${value}`;
-                }
-            }
-        }
-
-        // Initialize menu
-        const menu = new LiquidGlassMenu();
-
-        // Global access for external calls
-        window.LiquidGlassMenu = menu;
-
-        // Listen for messages from FiveM (DUI callback)
-        window.addEventListener('message', function(event) {
-            try {
-                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                if (window.LiquidGlassMenu) {
-                    window.LiquidGlassMenu.handleMessage(data);
-                }
-            } catch (e) {
-                console.log('Error parsing message:', e);
-            }
-        });
-
-        // Alternative message listener for some FiveM versions
-        document.addEventListener('duiMessage', function(event) {
-            if (window.LiquidGlassMenu && event.detail) {
-                window.LiquidGlassMenu.handleMessage(event.detail);
-            }
-        });
-
-        console.log('LiquidGlass Menu Loaded Successfully!');
-    </script>
-</body>
-</html>
+export default App;
