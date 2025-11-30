@@ -1,364 +1,483 @@
-import React, { useState, useEffect, useRef } from 'react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA Style Menu</title>
+    <!-- Load Google Font: Electrolize (Sleek, High-Tech, Angular) -->
+    <link href="https://fonts.googleapis.com/css2?family=Electrolize&display=swap" rel="stylesheet">
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for a darker, sleek look */
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2); /* Darker track */
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #444; /* Dark gray thumb */
+            border-radius: 3px;
+        }
 
-// --- Configuration ---
-const HEADER_BANNER = "https://i.ibb.co/6JphhX1G/Menu-Banner3.png";
+        /* Basic container styling */
+        body {
+            background-color: #111;
+            color: white;
+            /* Use Electrolize for the entire menu UI */
+            font-family: 'Electrolize', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            min-height: 100vh;
+            padding-left: 5rem; /* Equivalent to your pl-20 */
+            user-select: none;
+            overflow: hidden;
+        }
 
-// --- Menu Data Definitions ---
+        /* Keyframes for simple fade/slide-in (Tailwind utilities handle most of the rest) */
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out;
+        }
+        
+        .menu-hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
 
-// Helper to create simple items
-const item = (label, props = {}) => ({ label, type: 'action', ...props });
-const submenu = (label, items, props = {}) => ({ label, type: 'submenu', items, ...props });
-const toggle = (label, props = {}) => ({ label, type: 'toggle', value: false, ...props });
-const slider = (label, min, max, initial, props = {}) => ({ label, type: 'slider', min, max, value: initial, ...props });
-
-// The Player Options Submenu Content
-const playerOptionsItems = [
-  toggle('Godmode'),
-  slider('Quick Regen', 1, 2, 1),
-  item('Heal'),
-  item('Armour'),
-  item('Clean'),
-  toggle('Auto Clean'),
-  toggle('No Clip', { description: 'Fly through objects, without T Posing, your player is still running.' }),
-  toggle('No Collisions', { description: 'Phase through any native object.' }),
-  toggle('Invisibility'),
-  toggle('Player Visible Locally', { description: 'You are invisible to other players.' }),
-  toggle('Super Run'),
-  slider('Swim Speed', 1, 20, 10), // Assuming reasonable max for swim speed
-  toggle('Super Jump'),
-  toggle('Super Flight'),
-  toggle('Explosive Melee'),
-  toggle('Seatbelt', { description: 'For vehicles.' }),
-  toggle('No Ragdoll'),
-  toggle('Infinite Stamina'),
-  item('Clone Bodyguard', { description: 'Clones a bodyguard of you.' }),
-  slider('Damage Mod', 1, 5, 1),
-  slider('Melee Damage Mod', 1, 5, 1),
-  item('Suicide', { description: 'Kills your player.' }),
-];
-
-// Main Menu Structure
-const MENU_DATA = {
-  Local: [
-    submenu('Player Options', playerOptionsItems, { 
-      description: 'Submenu containing features directly related to your player ped.' 
-    }),
-    submenu('Vehicle Options', [item('Repair'), item('Upgrade'), toggle('Godmode')]),
-    submenu('Model Changer', [item('Reset'), item('Input Custom')]),
-    submenu('Outfitter', [item('Wardrobe')]),
-    submenu('Animations', [item('Stop Animation')]),
-    submenu('PTFX', [item('Stop PTFX')]),
-    submenu('Teleport', [item('Waypoint'), item('Objective')]),
-    submenu('Aim Assist', [toggle('Silent Aim')]),
-    submenu('Weapons', [item('Give All')]),
-    submenu('Weather and Time', [item('Freeze')]),
-    submenu('Scripts', []),
-    submenu('Script Features', []),
-    submenu('ASI Plugins', [], {
-      description: 'Submenu containing options related to loading and unloading .asi scripts.',
-      warning: 'Must have the separate MDSOAB .asi loader installed. https://gta.2take1.menu/dev/mdsoab/'
-    }),
-    submenu('DLCs', []),
-    submenu('Misc', []),
-    submenu('Settings', []),
-  ],
-  Online: [
-    submenu('Online Players', []),
-    submenu('All Players', []),
-    submenu('Lobby', []),
-    submenu('Visuals', []),
-    submenu('Modder Detection', []),
-  ],
-  Spawn: [
-    submenu('Vehicles', []),
-    submenu('Objects', []),
-    submenu('Peds', []),
-    submenu('Editor', []),
-  ]
-};
-
-const TABS = Object.keys(MENU_DATA);
-
-const App = () => {
-  // --- State ---
-  const [activeTab, setActiveTab] = useState(0);
-  const [menuVisible, setMenuVisible] = useState(true);
-  
-  // Navigation Stack: Keeps track of where we are.
-  // Each item in stack: { title: string, items: array, selectedIndex: number }
-  const [navStack, setNavStack] = useState([]);
-  
-  // Current Selection (for the current active view)
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
-  // Dynamic Item State (Mutable copy for toggles/sliders in this session)
-  // In a real app, this might sync with Lua.
-  const [localData, setLocalData] = useState(MENU_DATA);
-
-  // Refs
-  const listRef = useRef(null);
-  const itemRefs = useRef([]);
-
-  // --- Derived State ---
-  const isRoot = navStack.length === 0;
-  
-  // Get the list of items we should currently display
-  const currentViewItems = isRoot 
-    ? localData[TABS[activeTab]] 
-    : navStack[navStack.length - 1].items;
-
-  const currentHeader = isRoot ? TABS[activeTab] : navStack[navStack.length - 1].title;
-  const selectedItem = currentViewItems[selectedIndex];
-
-  // --- Helpers ---
-  
-  // Modify an item in the current view (e.g. toggle boolean or change slider value)
-  const updateItemState = (index, updates) => {
-    if (isRoot) {
-      // Logic to update root items would go here (complex due to structure)
-      // For this demo, we mostly update inside submenus
-    } else {
-      const newStack = [...navStack];
-      const activeLayer = newStack[newStack.length - 1];
-      const newItems = [...activeLayer.items];
-      newItems[index] = { ...newItems[index], ...updates };
-      activeLayer.items = newItems;
-      setNavStack(newStack);
-    }
-  };
-
-  // --- Interaction Logic ---
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!menuVisible) return;
-
-      const currentItem = currentViewItems[selectedIndex];
-
-      switch (e.key) {
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedIndex(prev => prev > 0 ? prev - 1 : currentViewItems.length - 1);
-          break;
-          
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedIndex(prev => prev < currentViewItems.length - 1 ? prev + 1 : 0);
-          break;
-
-        case 'ArrowLeft':
-          e.preventDefault();
-          if (currentItem?.type === 'slider') {
-             // Decrease Slider
-             const newVal = Math.max(currentItem.min, currentItem.value - 1);
-             updateItemState(selectedIndex, { value: newVal });
-          } else if (!isRoot) {
-            // Go Back
-            const prevStack = navStack[navStack.length - 1];
-            setNavStack(prev => prev.slice(0, -1));
-            setSelectedIndex(prevStack.previousIndex || 0);
-          } else {
-            // Change Tab
-            setActiveTab(prev => prev > 0 ? prev - 1 : TABS.length - 1);
-            setSelectedIndex(0);
-          }
-          break;
-
-        case 'Backspace':
-          e.preventDefault();
-          if (!isRoot) {
-            const prevStack = navStack[navStack.length - 1];
-            setNavStack(prev => prev.slice(0, -1));
-            setSelectedIndex(prevStack.previousIndex || 0);
-          }
-          break;
-
-        case 'ArrowRight':
-          e.preventDefault();
-          if (currentItem?.type === 'slider') {
-            // Increase Slider
-            const newVal = Math.min(currentItem.max, currentItem.value + 1);
-            updateItemState(selectedIndex, { value: newVal });
-          } else if (currentItem?.type === 'submenu') {
-            // Enter Submenu
-            setNavStack(prev => [
-              ...prev, 
-              { 
-                title: currentItem.label, 
-                items: currentItem.items, 
-                previousIndex: selectedIndex 
-              }
-            ]);
-            setSelectedIndex(0);
-          } else {
-             // Root Tab Change
-             if(isRoot) {
-                setActiveTab(prev => prev < TABS.length - 1 ? prev + 1 : 0);
-                setSelectedIndex(0);
-             }
-          }
-          break;
-
-        case 'Enter':
-          e.preventDefault();
-          if (currentItem?.type === 'submenu') {
-            setNavStack(prev => [
-              ...prev, 
-              { 
-                title: currentItem.label, 
-                items: currentItem.items, 
-                previousIndex: selectedIndex 
-              }
-            ]);
-            setSelectedIndex(0);
-          } else if (currentItem?.type === 'toggle') {
-            updateItemState(selectedIndex, { value: !currentItem.value });
-          } else if (currentItem?.type === 'action') {
-            // Flash effect or console log
-            console.log("Triggered:", currentItem.label);
-          }
-          break;
-
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [menuVisible, selectedIndex, navStack, activeTab, currentViewItems, isRoot]);
-
-  // Auto-scroll effect
-  useEffect(() => {
-    if (itemRefs.current[selectedIndex] && listRef.current) {
-      const el = itemRefs.current[selectedIndex];
-      const container = listRef.current;
-      const elTop = el.offsetTop;
-      const elBottom = elTop + el.clientHeight;
-      const containerTop = container.scrollTop;
-      const containerBottom = containerTop + container.clientHeight;
-      if (elTop < containerTop) container.scrollTop = elTop;
-      else if (elBottom > containerBottom) container.scrollTop = elBottom - container.clientHeight;
-    }
-  }, [selectedIndex]);
-
-  // --- Rendering Helpers ---
-
-  const renderValue = (item) => {
-    if (item.type === 'toggle') {
-      return item.value ? <span className="text-green-400 font-bold">[ON]</span> : <span className="text-red-400 font-bold">[OFF]</span>;
-    }
-    if (item.type === 'slider') {
-      return <span className="font-mono text-xs">{`< ${item.value} >`}</span>;
-    }
-    if (item.type === 'submenu') {
-      return <span className="font-bold text-[10px] tracking-tighter">{">>"}</span>;
-    }
-    return null;
-  };
-
-  return (
-    <div className="min-h-screen w-full flex items-center justify-start pl-20 bg-transparent text-sm font-sans select-none overflow-hidden relative">
-      
-      {/* Background (Hidden in production/transparent) */}
-      <div className="absolute inset-0 z-[-1] opacity-0"></div>
-
-      {menuVisible && (
-        <div className="relative flex items-start gap-4">
-          
-          {/* --- MAIN MENU CONTAINER --- */}
-          <div className="w-[320px] flex flex-col shadow-2xl animate-in fade-in slide-in-from-left-4 duration-300">
-            
-            {/* Header */}
-            <div className="h-24 relative bg-black border-b border-white/10 shrink-0">
-              <img src={HEADER_BANNER} alt="Banner" className="w-full h-full object-cover opacity-90" />
-              
-              {/* Tabs (Only visible at Root) */}
-              {isRoot ? (
-                <div className="absolute bottom-0 left-0 w-full flex px-2 gap-1 bg-gradient-to-t from-black/80 to-transparent pt-4">
-                  {TABS.map((tab, index) => (
-                    <div
-                      key={tab}
-                      className={`
-                        flex-1 text-center py-1 cursor-pointer transition-colors duration-150 uppercase tracking-wide text-xs font-semibold z-10
-                        ${activeTab === index 
-                          ? 'bg-gradient-to-b from-gray-200 to-gray-400 text-black shadow-lg' 
-                          : 'text-gray-300 hover:text-white bg-black/40'}
-                      `}
-                      onClick={() => { setActiveTab(index); setSelectedIndex(0); }}
-                    >
-                      {tab}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                /* Breadcrumb / Submenu Title when deep in menu */
-                <div className="absolute bottom-0 left-0 w-full bg-black/80 text-white px-3 py-1 text-xs font-bold border-t border-white/20">
-                   {currentHeader}
-                </div>
-              )}
-            </div>
-
-            {/* List */}
-            <div 
-              ref={listRef}
-              className="bg-black/95 h-[400px] overflow-y-auto flex flex-col py-2 scrollbar-thin pr-1"
-            >
-              <style>{`
-                ::-webkit-scrollbar { width: 6px; }
-                ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
-                ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
-              `}</style>
-
-              {currentViewItems.map((item, index) => (
-                <div
-                  key={index}
-                  ref={el => itemRefs.current[index] = el}
-                  className={`
-                    px-3 py-1 flex items-center justify-between cursor-pointer transition-all duration-75 shrink-0
-                    ${selectedIndex === index 
-                      ? 'bg-white text-black font-semibold' 
-                      : 'text-gray-200 hover:bg-white/10'}
-                  `}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                >
-                  <span className="truncate pr-2">{item.label}</span>
-                  <div className="flex items-center gap-2">
-                     {renderValue(item)}
-                  </div>
-                </div>
-              ))}
-              
-              {currentViewItems.length === 0 && (
-                 <div className="text-gray-500 text-xs text-center py-4 italic">No Options</div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="bg-black text-gray-400 text-[10px] px-2 py-1 flex justify-between items-center border-t border-white/20 shrink-0">
-              <span>GIA Premium</span>
-              <span>v3.0.1</span>
-            </div>
-          </div>
-
-          {/* --- INFO BOX --- */}
-          {selectedItem?.description && (
-            <div className="w-[280px] bg-black/90 p-4 border-l-4 border-white/20 text-white shadow-xl animate-in fade-in slide-in-from-left-2 duration-300 mt-24">
-              <div className="text-xs leading-relaxed text-gray-300">
-                {selectedItem.description}
-              </div>
-              {selectedItem.warning && (
-                <div className="mt-3 text-xs text-yellow-500 font-medium leading-relaxed">
-                  {selectedItem.warning}
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>
-      )}
+    <div id="app-container" class="relative flex items-start gap-4">
+        <!-- Menu and Info Box will be rendered here -->
     </div>
-  );
-};
 
-export default App;
+    <script>
+        // --- Configuration ---
+        const HEADER_BANNER = "https://i.ibb.co/6JphhX1G/Menu-Banner3.png";
+
+        // --- Menu Data Definitions ---
+        const item = (label, props = {}) => ({ label, type: 'action', ...props });
+        const submenu = (label, items, props = {}) => ({ label, type: 'submenu', items, ...props });
+        const toggle = (label, props = {}) => ({ label, type: 'toggle', value: false, ...props });
+        const slider = (label, min, max, initial, props = {}) => ({ label, type: 'slider', min, max, value: initial, ...props });
+
+        const playerOptionsItems = [
+            toggle('Godmode'),
+            slider('Quick Regen', 1, 2, 1),
+            item('Heal'),
+            item('Armour'),
+            item('Clean'),
+            toggle('Auto Clean'),
+            toggle('No Clip', { description: 'Fly through objects, without T Posing, your player is still running.' }),
+            toggle('No Collisions', { description: 'Phase through any native object.' }),
+            toggle('Invisibility'),
+            toggle('Player Visible Locally', { description: 'You are invisible to other players.' }),
+            toggle('Super Run'),
+            slider('Swim Speed', 1, 20, 10),
+            toggle('Super Jump'),
+            toggle('Super Flight'),
+            toggle('Explosive Melee'),
+            toggle('Seatbelt', { description: 'For vehicles.' }),
+            toggle('No Ragdoll'),
+            toggle('Infinite Stamina'),
+            item('Clone Bodyguard', { description: 'Clones a bodyguard of you.' }),
+            slider('Damage Mod', 1, 5, 1),
+            slider('Melee Damage Mod', 1, 5, 1),
+            item('Suicide', { description: 'Kills your player.' }),
+        ];
+
+        let MENU_DATA = {
+            Local: [
+                submenu('Player Options', playerOptionsItems, { 
+                    description: 'Submenu containing features directly related to your player ped.' 
+                }),
+                submenu('Vehicle Options', [item('Repair'), item('Upgrade'), toggle('Godmode')]),
+                submenu('Model Changer', [item('Reset'), item('Input Custom')]),
+                submenu('Outfitter', [item('Wardrobe')]),
+                submenu('Animations', [item('Stop Animation')]),
+                submenu('PTFX', [item('Stop PTFX')]),
+                submenu('Teleport', [item('Waypoint'), item('Objective')]),
+                submenu('Aim Assist', [toggle('Silent Aim')]),
+                submenu('Weapons', [item('Give All')]),
+                submenu('Weather and Time', [item('Freeze')]),
+                submenu('Scripts', []),
+                submenu('Script Features', []),
+                submenu('ASI Plugins', [], {
+                    description: 'Submenu containing options related to loading and unloading .asi scripts.',
+                    warning: 'Must have the separate MDSOAB .asi loader installed. https://gta.2take1.menu/dev/mdsoab/'
+                }),
+                submenu('DLCs', []),
+                submenu('Misc', []),
+                submenu('Settings', []),
+            ],
+            Online: [
+                submenu('Online Players', []),
+                submenu('All Players', []),
+                submenu('Lobby', []),
+                submenu('Visuals', []),
+                submenu('Modder Detection', []),
+            ],
+            Spawn: [
+                submenu('Vehicles', []),
+                submenu('Objects', []),
+                submenu('Peds', []),
+                submenu('Editor', []),
+            ]
+        };
+
+        const TABS = Object.keys(MENU_DATA);
+
+        // --- State Management ---
+        let state = {
+            activeTab: 0,
+            menuVisible: true,
+            // Navigation Stack: Keeps track of where we are.
+            // Each item in stack: { title: string, items: array, previousIndex: number }
+            navStack: [],
+            selectedIndex: 0,
+        };
+
+        // --- Derived State & Helpers ---
+
+        function isRoot() {
+            return state.navStack.length === 0;
+        }
+
+        function getCurrentViewItems() {
+            return isRoot()
+                ? MENU_DATA[TABS[state.activeTab]]
+                : state.navStack[state.navStack.length - 1].items;
+        }
+
+        function getCurrentHeader() {
+            return isRoot() ? TABS[state.activeTab] : state.navStack[state.navStack.length - 1].title;
+        }
+
+        function getSelectedItem() {
+            const items = getCurrentViewItems();
+            return items[state.selectedIndex];
+        }
+
+        // Deeply clone and update item state
+        function updateItemState(index, updates) {
+            if (isRoot()) {
+                // This logic is complex for deep data, but for the demo we'll focus on submenus
+                console.warn("Attempted to update item state at root level. Not implemented for this demo structure.");
+            } else {
+                // Create a deep copy of the entire data structure to update mutable state
+                const newMenuData = JSON.parse(JSON.stringify(MENU_DATA));
+                
+                // Traverse down the navigation stack to find the correct item array
+                let currentItems = newMenuData;
+                let currentStack = MENU_DATA[TABS[state.activeTab]];
+                
+                // Note: The original React state only updated items in the stack, not the source MENU_DATA.
+                // We will follow that pattern for simplicity in this port.
+                
+                // Get the active layer from the current nav stack (which holds the mutable items)
+                const activeLayer = state.navStack[state.navStack.length - 1];
+                const newItems = [...activeLayer.items];
+                
+                newItems[index] = { ...newItems[index], ...updates };
+                activeLayer.items = newItems;
+                
+                // Re-render
+                render();
+            }
+        }
+        
+        // --- Rendering Functions (Re-render the entire menu on state change) ---
+
+        function renderValue(item) {
+            if (item.type === 'toggle') {
+                return `<span class="${item.value ? 'text-green-400' : 'text-red-400'} font-bold text-xs">[${item.value ? 'ON' : 'OFF'}]</span>`;
+            }
+            if (item.type === 'slider') {
+                // Using font-mono for the slider value for a crisp, numerical look
+                return `<span class="font-mono text-xs text-gray-400">{< ${item.value} >}</span>`;
+            }
+            if (item.type === 'submenu') {
+                return `<span class="font-bold text-[10px] tracking-tighter text-gray-400">>></span>`;
+            }
+            return '';
+        }
+
+        function renderTabs() {
+            if (!isRoot()) return '';
+
+            return `
+                <div class="absolute bottom-0 left-0 w-full flex px-2 gap-1 bg-gradient-to-t from-black/80 to-transparent pt-4">
+                    ${TABS.map((tab, index) => `
+                        <div
+                            data-tab-index="${index}"
+                            class="flex-1 text-center py-1 cursor-pointer transition-colors duration-150 uppercase tracking-wide text-xs font-semibold z-10 
+                            ${state.activeTab === index 
+                                ? 'bg-gradient-to-b from-gray-200 to-gray-400 text-black shadow-lg' 
+                                : 'text-gray-300 hover:text-white bg-black/40'}
+                            "
+                            onclick="handleTabClick(${index})"
+                        >
+                            ${tab}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        function renderHeader() {
+            const currentHeader = getCurrentHeader();
+            return `
+                <div class="h-24 relative bg-black border-b border-white/10 shrink-0">
+                    <img src="${HEADER_BANNER}" alt="Banner" class="w-full h-full object-cover opacity-90" />
+                    
+                    ${isRoot() ? renderTabs() : `
+                        <div class="absolute bottom-0 left-0 w-full bg-black/80 text-white px-3 py-1 text-xs font-bold border-t border-white/20">
+                            ${currentHeader}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function renderList() {
+            const currentViewItems = getCurrentViewItems();
+            
+            const listHTML = currentViewItems.map((item, index) => `
+                <div
+                    data-item-index="${index}"
+                    class="menu-item px-3 py-1 flex items-center justify-between cursor-pointer transition-all duration-75 shrink-0
+                    ${state.selectedIndex === index 
+                        ? 'bg-white text-black font-semibold' 
+                        : 'text-gray-200 hover:bg-white/10'}
+                    "
+                    onmouseenter="setSelectedIndex(${index})"
+                    onclick="handleItemSelect()"
+                >
+                    <span class="truncate pr-2">${item.label}</span>
+                    <div class="flex items-center gap-2">
+                        ${renderValue(item)}
+                    </div>
+                </div>
+            `).join('');
+
+            return `
+                <div id="menu-list" class="bg-black/95 h-[400px] overflow-y-auto flex flex-col py-2 scrollbar-thin pr-1">
+                    ${listHTML}
+                    
+                    ${currentViewItems.length === 0 ? `
+                        <div class="text-gray-500 text-xs text-center py-4 italic">No Options</div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderFooter() {
+            return `
+                <div class="bg-black text-gray-400 text-[10px] px-2 py-1 flex justify-between items-center border-t border-white/20 shrink-0">
+                    <span>GIA Premium</span>
+                    <span>v3.0.1</span>
+                </div>
+            `;
+        }
+
+        function renderInfoBox() {
+            const selectedItem = getSelectedItem();
+            if (!selectedItem || !selectedItem.description) return '';
+
+            return `
+                <div class="w-[280px] bg-black/90 p-4 border-l-4 border-white/20 text-white shadow-xl animate-fade-in mt-24">
+                    <div class="text-xs leading-relaxed text-gray-300">
+                        ${selectedItem.description}
+                    </div>
+                    ${selectedItem.warning ? `
+                        <div class="mt-3 text-xs text-yellow-500 font-medium leading-relaxed">
+                            ${selectedItem.warning}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderMenu() {
+            const menuHTML = `
+                <div class="w-[320px] flex flex-col shadow-2xl animate-fade-in">
+                    ${renderHeader()}
+                    ${renderList()}
+                    ${renderFooter()}
+                </div>
+            `;
+
+            return `
+                ${menuHTML}
+                ${renderInfoBox()}
+            `;
+        }
+
+        function render() {
+            const container = document.getElementById('app-container');
+            if (!container) return;
+            
+            container.innerHTML = state.menuVisible ? renderMenu() : '';
+            
+            if (state.menuVisible) {
+                // After rendering, handle auto-scroll
+                autoScroll();
+            }
+        }
+
+        // --- Interaction Logic (Vanilla JS Functions) ---
+
+        function autoScroll() {
+            const listRef = document.getElementById('menu-list');
+            const items = listRef ? listRef.querySelectorAll('.menu-item') : [];
+            const el = items[state.selectedIndex];
+
+            if (el && listRef) {
+                const elTop = el.offsetTop;
+                const elBottom = elTop + el.clientHeight;
+                const containerTop = listRef.scrollTop;
+                const containerBottom = containerTop + listRef.clientHeight;
+                
+                if (elTop < containerTop) {
+                    listRef.scrollTop = elTop;
+                } else if (elBottom > containerBottom) {
+                    listRef.scrollTop = elBottom - listRef.clientHeight;
+                }
+            }
+        }
+        
+        function setSelectedIndex(newIndex) {
+             if (state.selectedIndex !== newIndex) {
+                state.selectedIndex = newIndex;
+                render();
+            }
+        }
+
+        function handleTabClick(index) {
+            state.activeTab = index;
+            state.selectedIndex = 0;
+            render();
+        }
+
+        function enterSubmenu(item) {
+            state.navStack.push({
+                title: item.label,
+                items: item.items,
+                previousIndex: state.selectedIndex 
+            });
+            state.selectedIndex = 0;
+            render();
+        }
+
+        function goBack() {
+            if (state.navStack.length > 0) {
+                const prevStack = state.navStack.pop();
+                state.selectedIndex = prevStack.previousIndex || 0;
+                render();
+            }
+        }
+        
+        function handleItemSelect() {
+            const currentItem = getSelectedItem();
+            if (!currentItem) return;
+
+            if (currentItem.type === 'submenu') {
+                enterSubmenu(currentItem);
+            } else if (currentItem.type === 'toggle') {
+                // This updates the local item's value directly in the navStack
+                updateItemState(state.selectedIndex, { value: !currentItem.value });
+            } else if (currentItem.type === 'action') {
+                // Action triggered
+                console.log("Triggered:", currentItem.label);
+                // Simple visual feedback (e.g., flash the item) can be added here
+            }
+        }
+
+
+        // --- Keyboard Handler ---
+        document.addEventListener('keydown', function(e) {
+            if (!state.menuVisible) return;
+
+            const currentViewItems = getCurrentViewItems();
+            if (currentViewItems.length === 0) return;
+            
+            const currentItem = getSelectedItem();
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    e.preventDefault();
+                    state.selectedIndex = state.selectedIndex > 0 ? state.selectedIndex - 1 : currentViewItems.length - 1;
+                    render();
+                    break;
+                    
+                case 'ArrowDown':
+                    e.preventDefault();
+                    state.selectedIndex = state.selectedIndex < currentViewItems.length - 1 ? state.selectedIndex + 1 : 0;
+                    render();
+                    break;
+
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (currentItem?.type === 'slider') {
+                        const newVal = Math.max(currentItem.min, currentItem.value - 1);
+                        updateItemState(state.selectedIndex, { value: newVal });
+                    } else if (!isRoot()) {
+                        goBack();
+                    } else {
+                        state.activeTab = state.activeTab > 0 ? state.activeTab - 1 : TABS.length - 1;
+                        state.selectedIndex = 0;
+                        render();
+                    }
+                    break;
+
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (currentItem?.type === 'slider') {
+                        const newVal = Math.min(currentItem.max, currentItem.value + 1);
+                        updateItemState(state.selectedIndex, { value: newVal });
+                    } else if (currentItem?.type === 'submenu') {
+                        enterSubmenu(currentItem);
+                    } else if (isRoot()) {
+                        state.activeTab = state.activeTab < TABS.length - 1 ? state.activeTab + 1 : 0;
+                        state.selectedIndex = 0;
+                        render();
+                    }
+                    break;
+
+                case 'Enter':
+                    e.preventDefault();
+                    handleItemSelect();
+                    break;
+
+                case 'Backspace':
+                case 'Escape': // Often used as a back button in menus
+                    e.preventDefault();
+                    goBack();
+                    break;
+
+                case 'F4': // Toggle menu visibility (common GTA key)
+                    e.preventDefault();
+                    state.menuVisible = !state.menuVisible;
+                    render();
+                    break;
+
+                default:
+                    break;
+            }
+        });
+
+
+        // --- Initial Load ---
+        window.onload = function() {
+            render();
+            console.log("GTA Style Menu loaded. Use Arrow Keys and Enter/Backspace to navigate. Press F4 to toggle visibility.");
+        };
+    </script>
+</body>
+</html>
