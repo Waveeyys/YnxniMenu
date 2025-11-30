@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GIA Premium Menu</title>
+    <title>GTA Style Menu</title>
     <!-- Load Google Font: Electrolize (Sleek, High-Tech, Angular) -->
     <link href="https://fonts.googleapis.com/css2?family=Electrolize&display=swap" rel="stylesheet">
     <!-- Load Tailwind CSS -->
@@ -54,11 +54,12 @@
             transform: translateX(25px); /* Explicit pixel value for reliable translation */
         }
 
-        /* Set a dark background only in local preview mode */
-        body:not([data-nui-mode="true"]) {
-            background-color: #111;
+        .menu-hidden {
+            display: none;
         }
-
+        .menu-hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -72,6 +73,9 @@
         
         // Checks if we are running inside the FiveM/RedM NUI browser
         const isNUI = () => typeof window.GetParentResourceName === 'function';
+
+        // Set NUI mode attribute for CSS
+        document.body.setAttribute('data-nui-mode', isNUI() ? 'true' : 'false');
 
         /**
          * Sends a message back to the FiveM/RedM Lua client script.
@@ -102,6 +106,11 @@
 
         // --- Configuration ---
         const HEADER_BANNER = "https://i.ibb.co/6JphhX1G/Menu-Banner3.png";
+
+        // Set a dark background only in local preview mode
+        if (!isNUI()) {
+            document.body.style.backgroundColor = '#111';
+        }
 
         // --- Menu Data Definitions (Aligned with Premium Structure) ---
         // item: action to trigger once
